@@ -1,27 +1,71 @@
-from sys import argv
-import itertools
+"""
+<name>Fasta Converter</name>
+<description>Converts Fasta files with biological sequences into tab files</description>
+<icon>icons/fasta.gif</icon>
+<priority>1000</priority>
+"""
 
-script, usr_file = argv
+from OWWidget import *
+import OWGUI
+import re
 
-#function that simply identifies a line as a header or not
+class OWFastaConverter(OWWidget):
+    
+    def __init__(self, parent=None, signalManager=None):
+		OWWidget.__init__(self, parent, signalManager, 'new_tab_file')
+        
+       	self.inputs = [("convertFastaTab", ExampleTable, self.convertFastaTab)]
+        self.outputs = [("Tab File", ExampleTable)]
 
-def find_header(head):
-    return head[0] == '>'
+        # GUI
+        box = OWGUI.widgetBox(self.controlArea, "Info")
+        self.infoa = OWGUI.widgetLabel(box, 'No fasta file yet, waiting to get something.')
+        self.infob = OWGUI.widgetLabel(box, '')
+        self.resize(100,50)
+		
+        tab_file = regex_function.ExapmleTable('')
+	def convertFastaTab(self, dataset):
+        if dataset:        
+        	def cleanup(b_array):##eliminates empty array that results from re.split
+                	return b_array[1:]
+        
+        	input_file=open("{}".format(dataset), 'r')
+        	primary_input=input_file.read()##primary_input is now a string containing the original fasta data
+        	headpattern= re.compile(">(.+)$", re.M)#pattern for isolating the header
+        	filepat=re.compile(r"(.+)\..+")##pattern for finding the file path no matter the extension-may cause a crash if directories have periods in their names
+        	input_filename=filepat.findall(dataset)[0]
+        	headers = headpattern.findall(primary_input)
+        	bodies = re.split(">.*\\n", primary_input)##pattern for isolating bodies (sequences)
+        	bodies = cleanup(bodies)
+        
+        	clean_bodies1=[]
+       		clean_bodies2=[]
 
-with open('usr_file') as fa:
- 	print len(list(itertools.groupby(fa, key=find_header)))//2
+        	##below eliminate all whitespaces that may have found their way into the sequences
+        	for i in bodies:
+                	clean_bodies1.append(re.sub("\\n", "", i))##may be redundant
+        	for i in clean_bodies1:
+                	clean_bodies2.append(i.strip(" \t\n\r"))
+                
+        	newstring="Description\tSequence Data\n\n"
+        
+        	for i in range(len(clean_bodies2)):
+                	newstring=newstring+headers[i]+"\t"+clean_bodies2[i]+"\n"##Format: head1<tab>body1<newline>...
+        #print newstring
+        
+        	output=open("{}.tab".format(input_filename), 'w')
+        	final = output.write(newstring)
+        	self.infob.setText("File converted, saved as {}.tab".format(input_filename))
+			self.send('Tab File', final)
+        else:
+            self.infoa.setText('No data on input yet, waiting to get something.')
+            self.infob.setText('')
+            self.send("Tab File", None)
 
-# the groups will simply alternate between a group of header lines, 
-# and a group of non-header lines
-
-def fasta_reader(file):
-  for header,group in itertools.groupby(fa, find_header):
-    if header:
-      head = group.next()
-      header_id = head[1:].split()[0]
-    else:
-      sequence = ''.join(head.strip() for head in group)
-      yield header_id, sequence
-
-with open('usr_file') as fa:
-  d = dict(fasta_reader(fa))
+if __name__=="__main__":
+    appl = QApplication(sys.argv)
+    ow = OWFastaConverter()
+    ow.show()
+    dataset = orange.ExampleTable('../datasets/iris.tab')
+    ow.convertFastaTab(dataset)
+    appl.exec_()		
